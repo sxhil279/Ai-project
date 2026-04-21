@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI NPC Dialogue Engine — INT428</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d0d0f; --surface: #16161a; --surface2: #1e1e24;
+      --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.15);
+      --text: #e8e6f0; --muted: #7b7890; --accent: #7f77dd; --accent2: #3C3489;
+      --teal: #1D9E75; --radius: 12px; --radius-sm: 8px;
+    }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+    header { padding: 13px 26px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 13px; background: var(--surface); }
+    .logo { width: 33px; height: 33px; background: var(--accent); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    header h1 { font-size: 14.5px; font-weight: 600; }
+    header p  { font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+    .hbadge { margin-left: auto; font-size: 10.5px; padding: 3px 10px; border-radius: 20px; border: 0.5px solid rgba(29,158,117,0.35); background: rgba(29,158,117,0.1); color: var(--teal); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .ldot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    main { flex: 1; display: grid; grid-template-columns: 205px 1fr 255px; min-height: 0; }
+    .sidebar { border-right: 0.5px solid var(--border); padding: 16px 11px; display: flex; flex-direction: column; gap: 5px; background: var(--surface); }
+    .s-label { font-size: 9.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; padding: 0 8px; margin-bottom: 3px; }
+    .npc-item { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: var(--radius-sm); cursor: pointer; border: 0.5px solid transparent; transition: all .15s; }
+    .npc-item:hover { background: var(--surface2); }
+    .npc-item.active { background: rgba(127,119,221,0.1); border-color: rgba(127,119,221,0.28); }
+    .nav { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+    .ni-name { font-size: 12px; font-weight: 500; }
+    .ni-role { font-size: 9.5px; color: var(--muted); margin-top: 1px; }
+    .sdiv { height: 0.5px; background: var(--border); margin: 7px 0; }
+    .clr-btn { width: 100%; padding: 6px; font-size: 11px; background: transparent; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); color: var(--muted); cursor: pointer; font-family: inherit; transition: all .15s; }
+    .clr-btn:hover { background: var(--surface2); color: var(--text); }
+    .mem-info { margin-top: auto; padding-top: 12px; font-size: 10px; color: var(--muted); line-height: 1.7; }
+    .mem-info strong { color: var(--text); font-size: 10.5px; display: block; margin-bottom: 2px; }
+    .chat-area { display: flex; flex-direction: column; }
+    .chat-top { padding: 11px 18px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 11px; background: var(--surface); }
+    .av-lg { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+    .ct-name { font-size: 13px; font-weight: 600; }
+    .ct-role { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+    .mem-pill { margin-left: auto; font-size: 10px; padding: 3px 9px; border-radius: 20px; background: rgba(127,119,221,0.1); color: #AFA9EC; border: 0.5px solid rgba(127,119,221,0.22); white-space: nowrap; }
+    .messages { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 11px; max-height: 430px; }
+    .messages::-webkit-scrollbar { width: 3px; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+    .msg { display: flex; gap: 7px; align-items: flex-start; }
+    .msg.user { flex-direction: row-reverse; }
+    .msg-av { width: 25px; height: 25px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 600; flex-shrink: 0; margin-top: 2px; }
+    .bubble { max-width: 76%; padding: 8px 12px; border-radius: var(--radius); font-size: 12.5px; line-height: 1.6; }
+    .msg.npc .bubble { background: var(--surface2); border-radius: 4px 12px 12px 12px; border: 0.5px solid var(--border); color: var(--text); }
+    .msg.user .bubble { background: rgba(127,119,221,0.15); border-radius: 12px 4px 12px 12px; border: 0.5px solid rgba(127,119,221,0.28); color: #CECBF6; }
+    .typing-row { display: flex; gap: 7px; align-items: center; }
+    .typing-bub { padding: 9px 13px; background: var(--surface2); border-radius: 4px 12px 12px 12px; border: 0.5px solid var(--border); display: flex; gap: 4px; align-items: center; }
+    .tdot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: bop 1.1s infinite; }
+    .tdot:nth-child(2){animation-delay:.18s} .tdot:nth-child(3){animation-delay:.36s}
+    @keyframes bop{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+    .input-sec { padding: 12px 18px; border-top: 0.5px solid var(--border); background: var(--surface); }
+    .input-row { display: flex; gap: 8px; }
+    .input-row input { flex: 1; background: var(--surface2); border: 0.5px solid var(--border2); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12.5px; color: var(--text); outline: none; font-family: inherit; transition: border-color .15s; }
+    .input-row input:focus { border-color: var(--accent); }
+    .input-row input::placeholder { color: var(--muted); }
+    .btn-send { padding: 8px 16px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .15s; }
+    .btn-send:hover { background: var(--accent2); }
+    .btn-send:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; }
+    .quick-row { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+    .qbtn { font-size: 10.5px; padding: 3px 9px; border: 0.5px solid var(--border2); border-radius: 20px; background: transparent; color: var(--muted); cursor: pointer; font-family: inherit; transition: all .15s; }
+    .qbtn:hover { background: var(--surface2); color: var(--text); border-color: var(--accent); }
+    .right { border-left: 0.5px solid var(--border); padding: 16px 15px; display: flex; flex-direction: column; gap: 0; background: var(--surface); overflow-y: auto; }
+    .right::-webkit-scrollbar { width: 3px; }
+    .right::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+    .psec { margin-bottom: 16px; }
+    .psec h3 { font-size: 9.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 9px; }
+    .pdiv { height: 0.5px; background: var(--border); margin: 0 0 16px; }
+    .trait-row { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; font-size: 11px; color: var(--muted); }
+    .tlabel { flex: 1; }
+    .tbar { width: 60px; height: 3px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+    .tfill { height: 100%; border-radius: 2px; background: var(--accent); transition: width .5s; }
+    .tval { font-size: 10px; min-width: 20px; text-align: right; }
+    .etag { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin: 2px; background: rgba(127,119,221,0.1); color: #AFA9EC; border: 0.5px solid rgba(127,119,221,0.2); }
+    .cfg-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .cfg-label { font-size: 11px; color: var(--muted); }
+    .cfg-val { font-size: 11.5px; font-weight: 600; color: var(--text); }
+    input[type=range] { width: 100%; accent-color: var(--accent); margin: 3px 0 3px; cursor: pointer; }
+    .cfg-desc { font-size: 9.5px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+    .co-tag { display: flex; align-items: flex-start; gap: 6px; padding: 5px 8px; border-radius: var(--radius-sm); margin-bottom: 5px; background: var(--surface2); border: 0.5px solid var(--border); }
+    .co-badge { font-size: 9px; font-weight: 700; color: var(--accent); background: rgba(127,119,221,0.12); padding: 1px 5px; border-radius: 3px; flex-shrink: 0; margin-top: 1px; }
+    .co-text { font-size: 10px; color: var(--muted); line-height: 1.5; }
+    .flow { display: flex; align-items: center; flex-wrap: wrap; gap: 0; margin: 4px 0; }
+    .fb { font-size: 9.5px; padding: 3px 6px; border-radius: 4px; background: var(--surface2); border: 0.5px solid var(--border2); color: var(--muted); white-space: nowrap; }
+    .fb.ac { border-color: rgba(127,119,221,0.38); color: #AFA9EC; }
+    .fa { font-size: 9px; color: var(--muted); padding: 0 2px; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 999; }
+    .modal { background: var(--surface); border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 28px; width: 450px; max-width: 94vw; }
+    .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+    .modal p { font-size: 12px; color: var(--muted); margin-bottom: 18px; line-height: 1.65; }
+    .modal input { width: 100%; background: var(--surface2); border: 0.5px solid var(--border2); border-radius: var(--radius-sm); padding: 10px 13px; font-size: 13px; color: var(--text); outline: none; font-family: inherit; margin-bottom: 10px; }
+    .modal input:focus { border-color: var(--accent); }
+    .btn-primary { width: 100%; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .btn-primary:hover { background: var(--accent2); }
+    .modal-note { font-size: 10.5px; color: var(--muted); text-align: center; margin-top: 10px; }
+    .modal-note a { color: var(--accent); text-decoration: none; }
+    .err { color: #F09595; font-size: 11px; margin-bottom: 8px; display: none; }
+  </style>
+</head>
+<body>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2>&#127918; AI NPC Dialogue Engine</h2>
+    <p>INT428 — Artificial Intelligence Essentials · Domain-Specific AI Chatbot project.<br>Enter your Anthropic API key to begin. Stored in memory only — never persisted.</p>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." />
+    <div class="err" id="keyErr">Key must start with sk-ant-</div>
+    <button class="btn-primary" onclick="saveKey()">Launch engine &#8594;</button>
+    <p class="modal-note">Free key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></p>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">&#127918;</div>
+  <div>
+    <h1>AI NPC Dialogue Engine</h1>
+    <p>INT428 · Domain: Game AI / Interactive Storytelling · Generative AI Chatbot</p>
+  </div>
+  <div class="hbadge"><div class="ldot"></div>Claude API · claude-sonnet-4-20250514</div>
+</header>
+
+<main>
+  <!-- LEFT -->
+  <aside class="sidebar">
+    <div class="s-label">Characters</div>
+    <div id="npcList"></div>
+    <div class="sdiv"></div>
+    <div class="s-label">Session</div>
+    <button class="clr-btn" onclick="clearHistory()">&#x1F5D1; Clear conversation</button>
+    <div class="mem-info">
+      <strong>Memory: Session-based</strong>
+      Full chat history sent each API call for contextual continuity across turns.
+    </div>
+  </aside>
+
+  <!-- CENTER -->
+  <section class="chat-area">
+    <div class="chat-top">
+      <div class="av-lg" id="topAv"></div>
+      <div>
+        <div class="ct-name" id="topName"></div>
+        <div class="ct-role" id="topRole"></div>
+      </div>
+      <div class="mem-pill" id="memPill">0 turns in memory</div>
+    </div>
+    <div class="messages" id="messages"></div>
+    <div class="input-sec">
+      <div class="input-row">
+        <input type="text" id="userInput" placeholder="Speak to the character..." />
+        <button class="btn-send" id="sendBtn" onclick="sendMessage()">Send &#8594;</button>
+      </div>
+      <div class="quick-row" id="quickRow"></div>
+    </div>
+  </section>
+
+  <!-- RIGHT -->
+  <aside class="right">
+
+    <div class="psec">
+      <h3>Model configuration</h3>
+      <div class="cfg-row"><span class="cfg-label">Temperature</span><span class="cfg-val" id="tempVal">0.85</span></div>
+      <input type="range" id="tempSlider" min="0" max="1" step="0.05" value="0.85" oninput="updateSliders()" />
+      <div class="cfg-desc" id="tempDesc">High creativity — varied, expressive NPC responses.</div>
+
+      <div class="cfg-row"><span class="cfg-label">Top-p (nucleus sampling)</span><span class="cfg-val" id="topPVal">0.90</span></div>
+      <input type="range" id="topPSlider" min="0.1" max="1" step="0.05" value="0.90" oninput="updateSliders()" />
+      <div class="cfg-desc" id="topPDesc">Broad token pool — rich vocabulary in responses.</div>
+
+      <div class="cfg-row"><span class="cfg-label">Max output tokens</span><span class="cfg-val" id="tokVal">300</span></div>
+      <input type="range" id="tokSlider" min="50" max="600" step="50" value="300" oninput="updateSliders()" />
+    </div>
+
+    <div class="pdiv"></div>
+
+    <div class="psec">
+      <h3>Character traits</h3>
+      <div id="traitPanel"></div>
+    </div>
+
+    <div class="pdiv"></div>
+
+    <div class="psec">
+      <h3>Emotional state</h3>
+      <div id="emotionPanel"></div>
+    </div>
+
+    <div class="pdiv"></div>
+
+    <div class="psec">
+      <h3>Data flow (Q8)</h3>
+      <div class="flow">
+        <div class="fb">User Input</div><div class="fa">&#8594;</div>
+        <div class="fb ac">Prompt Builder</div><div class="fa">&#8594;</div>
+        <div class="fb ac">Claude API</div><div class="fa">&#8594;</div>
+        <div class="fb">NPC Reply</div>
+      </div>
+      <div style="font-size:9.5px;color:var(--muted);margin-top:6px;line-height:1.6;">
+        System prompt + full session history sent each call. Role: Domain Expert (Game NPC). Chatbot type: Generative (LLM-based).
+      </div>
+    </div>
+
+    <div class="pdiv"></div>
+
+    <div class="psec">
+      <h3>Syllabus coverage</h3>
+      <div class="co-tag"><span class="co-badge">CO4</span><span class="co-text">Transformer NLP — Claude Sonnet generates contextual dialogue</span></div>
+      <div class="co-tag"><span class="co-badge">CO5</span><span class="co-text">Generative AI + Prompt Engineering — system prompts define NPC persona</span></div>
+      <div class="co-tag"><span class="co-badge">CO2</span><span class="co-text">AI problem modeling — NPC state space via traits &amp; emotions</span></div>
+      <div class="co-tag"><span class="co-badge">CO3</span><span class="co-text">Probabilistic reasoning — temperature &amp; top-p control token distribution</span></div>
+    </div>
+
+  </aside>
+</main>
+
+<script>
+const NPCS = [
+  {
+    id:'merchant', name:'Aldric the Merchant', role:'Traveling Trader · Valeria',
+    initials:'AM', avStyle:'background:#FAEEDA;color:#633806',
+    mood:'Opportunistic', emotions:['Eager','Calculating','Cautious'],
+    traits:{Greed:82,Wit:70,Loyalty:45,Suspicion:60},
+    prompts:["What do you sell?","Any road rumors?","Can you lower the price?"],
+    system:`You are Aldric, a cunning medieval traveling merchant in the Kingdom of Valeria. You are greedy but witty and always seeking profit. You speak in slightly archaic merchant tone, know kingdom rumors, discuss wares, and negotiate prices. Keep replies to 2-3 sentences. Stay in character always. No markdown formatting.`
+  },
+  {
+    id:'knight', name:'Dame Lyra', role:'Royal Knight · Silver Shield Order',
+    initials:'DL', avStyle:'background:#E6F1FB;color:#0C447C',
+    mood:'Noble & Alert', emotions:['Duty-bound','Vigilant','Honorable'],
+    traits:{Honor:95,Courage:88,Mercy:72,Pride:65},
+    prompts:["What is your quest?","Tell me of the king.","Have you fought monsters?"],
+    system:`You are Dame Lyra, a noble royal knight of the Silver Shield Order in a medieval fantasy world. You speak formally with duty and honor as core values. Share tales of battle, the kingdom, and chivalric code. Keep replies to 2-3 sentences. Stay in character always. No markdown formatting.`
+  },
+  {
+    id:'wizard', name:'Oryn the Arcanist', role:'Court Wizard · Tower of Echoes',
+    initials:'OA', avStyle:'background:#EEEDFE;color:#3C3489',
+    mood:'Cryptic & Curious', emotions:['Intrigued','Aloof','Amused'],
+    traits:{Intelligence:98,Mystery:90,Patience:50,Arrogance:75},
+    prompts:["Teach me a spell.","What is magic?","Can you see my future?"],
+    system:`You are Oryn, an ancient arrogant court wizard in a fantasy world. You speak cryptically referencing arcane lore and ancient texts. You find most people beneath you intellectually but enjoy clever questions. Keep replies to 2-3 sentences. Stay in character always. No markdown formatting.`
+  },
+  {
+    id:'thief', name:'Sable', role:'Guild Rogue · Shadow Collective',
+    initials:'SB', avStyle:'background:#F1EFE8;color:#444441',
+    mood:'Sly & Wary', emotions:['Suspicious','Amused','Restless'],
+    traits:{Cunning:92,Speed:85,Trust:30,Charm:78},
+    prompts:["Teach me to pick locks.","Best heist you have done?","Who do you work for?"],
+    system:`You are Sable, a quick-witted rogue in a fantasy city guild. You speak in short sharp sentences with dry humor. Never fully trust anyone and always look for an angle. Hint at past jobs and the guild without revealing too much. Keep replies to 2-3 sentences. Stay in character always. No markdown formatting.`
+  }
+];
+
+const GREETINGS = {
+  merchant:"Ah, a traveler! You look like someone with coin to spare. Come, see what old Aldric has for you today!",
+  knight:  "Halt, traveler. I am Dame Lyra of the Silver Shield. State your purpose — and be quick about it.",
+  wizard:  "Another one seeking wisdom from the tower. Very well. Ask your question — but choose it carefully.",
+  thief:   "Keep your voice down. You are not exactly subtle, you know. What do you want?"
+};
+
+let API_KEY='', current=NPCS[0], loading=false;
+let histories={};
+NPCS.forEach(n=>histories[n.id]=[]);
+
+function saveKey(){
+  const k=document.getElementById('apiKeyInput').value.trim();
+  if(!k.startsWith('sk-ant-')){document.getElementById('keyErr').style.display='block';return;}
+  API_KEY=k;
+  document.getElementById('modalOverlay').style.display='none';
+  init();
+}
+document.getElementById('apiKeyInput').addEventListener('keydown',e=>{if(e.key==='Enter')saveKey();});
+
+function init(){ renderNPCList(); selectNPC(NPCS[0]); updateSliders(); }
+
+function renderNPCList(){
+  const el=document.getElementById('npcList'); el.innerHTML='';
+  NPCS.forEach(n=>{
+    const d=document.createElement('div');
+    d.className='npc-item'+(n.id===current.id?' active':'');
+    d.onclick=()=>selectNPC(n);
+    d.innerHTML=`<div class="nav" style="${n.avStyle}">${n.initials}</div>
+      <div><div class="ni-name">${n.name.split(' ').slice(0,2).join(' ')}</div>
+      <div class="ni-role">${n.role.split('·')[0].trim()}</div></div>`;
+    el.appendChild(d);
+  });
+}
+
+function selectNPC(npc){
+  current=npc; renderNPCList(); updateTopBar(); updateRightPanel(); updateQuickPrompts(); renderMessages();
+  if(histories[npc.id].length===0){histories[npc.id].push({role:'assistant',text:GREETINGS[npc.id]});renderMessages();}
+  updateMemPill();
+}
+
+function updateTopBar(){
+  const av=document.getElementById('topAv');
+  av.textContent=current.initials;
+  av.style.cssText=`width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0;${current.avStyle}`;
+  document.getElementById('topName').textContent=current.name;
+  document.getElementById('topRole').textContent=current.role;
+}
+
+function updateMemPill(){
+  const t=histories[current.id].filter(m=>m.role==='user').length;
+  document.getElementById('memPill').textContent=`${t} turn${t===1?'':'s'} in memory`;
+}
+
+function updateRightPanel(){
+  document.getElementById('traitPanel').innerHTML=Object.entries(current.traits).map(([k,v])=>
+    `<div class="trait-row"><span class="tlabel">${k}</span>
+     <div class="tbar"><div class="tfill" style="width:${v}%"></div></div>
+     <span class="tval">${v}</span></div>`).join('');
+  document.getElementById('emotionPanel').innerHTML=current.emotions.map(e=>`<span class="etag">${e}</span>`).join('');
+}
+
+function updateQuickPrompts(){
+  document.getElementById('quickRow').innerHTML=current.prompts.map(p=>
+    `<button class="qbtn" onclick="useQuick(${JSON.stringify(p)})">${p}</button>`).join('');
+}
+
+function updateSliders(){
+  const temp=parseFloat(document.getElementById('tempSlider').value);
+  const topP=parseFloat(document.getElementById('topPSlider').value);
+  const tok =parseInt(document.getElementById('tokSlider').value);
+  document.getElementById('tempVal').textContent=temp.toFixed(2);
+  document.getElementById('topPVal').textContent=topP.toFixed(2);
+  document.getElementById('tokVal').textContent=tok;
+  document.getElementById('tempDesc').textContent=
+    temp<0.3?'Low — deterministic, factual, consistent responses.':
+    temp<0.6?'Medium — balanced creativity and coherence.':
+    temp<0.8?'High — creative, expressive NPC responses.':
+    'Very high — highly varied, imaginative responses.';
+  document.getElementById('topPDesc').textContent=
+    topP<0.4?'Narrow pool — safe, predictable token selection.':
+    topP<0.7?'Moderate pool — reasonable vocabulary range.':
+    'Broad pool — rich vocabulary and diverse phrasing.';
+}
+
+function renderMessages(){
+  const box=document.getElementById('messages'); box.innerHTML='';
+  histories[current.id].forEach(m=>{
+    const isUser=m.role==='user';
+    const d=document.createElement('div'); d.className='msg '+(isUser?'user':'npc');
+    const avS=isUser?'background:rgba(127,119,221,0.22);color:#AFA9EC':current.avStyle;
+    d.innerHTML=`<div class="msg-av" style="${avS}">${isUser?'You':current.initials}</div>
+      <div class="bubble">${escH(m.text)}</div>`;
+    box.appendChild(d);
+  });
+  box.scrollTop=box.scrollHeight; updateMemPill();
+}
+
+function showTyping(){
+  const box=document.getElementById('messages');
+  const d=document.createElement('div'); d.className='typing-row'; d.id='typingEl';
+  d.innerHTML=`<div class="msg-av" style="${current.avStyle}">${current.initials}</div>
+    <div class="typing-bub"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>`;
+  box.appendChild(d); box.scrollTop=box.scrollHeight;
+}
+function removeTyping(){const t=document.getElementById('typingEl');if(t)t.remove();}
+
+function useQuick(text){document.getElementById('userInput').value=text;sendMessage();}
+
+function clearHistory(){
+  histories[current.id]=[];
+  histories[current.id].push({role:'assistant',text:GREETINGS[current.id]});
+  renderMessages();
+}
+
+async function sendMessage(){
+  if(loading)return;
+  const inp=document.getElementById('userInput');
+  const text=inp.value.trim(); if(!text)return;
+  inp.value=''; loading=true;
+  document.getElementById('sendBtn').disabled=true;
+  histories[current.id].push({role:'user',text});
+  renderMessages(); showTyping();
+
+  const temperature=parseFloat(document.getElementById('tempSlider').value);
+  const top_p=parseFloat(document.getElementById('topPSlider').value);
+  const max_tokens=parseInt(document.getElementById('tokSlider').value);
+
+  const apiMessages=histories[current.id].slice(0,-1).map(m=>({
+    role:m.role==='assistant'?'assistant':'user', content:m.text
+  }));
+  apiMessages.push({role:'user',content:text});
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':API_KEY,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens, temperature, top_p,
+        system:current.system,
+        messages:apiMessages
+      })
+    });
+    const data=await res.json(); removeTyping();
+    const reply=data.error?`[API Error: ${data.error.message}]`
+      :data.content?.find(c=>c.type==='text')?.text||'...';
+    histories[current.id].push({role:'assistant',text:reply});
+  }catch(e){
+    removeTyping();
+    histories[current.id].push({role:'assistant',text:'[Connection failed. Check your API key and network.]'});
+  }
+  renderMessages(); loading=false;
+  document.getElementById('sendBtn').disabled=false; inp.focus();
+}
+
+document.getElementById('userInput').addEventListener('keydown',e=>{if(e.key==='Enter')sendMessage();});
+function escH(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+</script>
+</body>
+</html>
